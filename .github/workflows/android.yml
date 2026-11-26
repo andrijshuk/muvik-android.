@@ -27,8 +27,10 @@ jobs:
       - name: Extract Android project
         run: |
           unzip "MuvikAndroidProject (7).zip" -d extracted
-          echo "Extracted files:"
-          find extracted -maxdepth 5 -type f | head -100
+          echo "=== MAIN ACTIVITY ==="
+          cat extracted/MuvikAndroidProject/app/src/main/java/com/muvik/aac/MainActivity.kt
+          echo "=== HTML SOURCE ==="
+          cat extracted/MuvikAndroidProject/app/src/main/assets/index.html
           test -f extracted/MuvikAndroidProject/app/build.gradle.kts
 
       - name: Align Java and Kotlin JVM targets
