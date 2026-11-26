@@ -18,7 +18,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
  private var ready=false
  private var chooser: ValueCallback<Array<Uri>>?=null
  private val request=4102
- override fun onCreate(savedInstanceState: Bundle?){
+ override fun onCreate(savedInstanceState:Bundle?){
   super.onCreate(savedInstanceState)
   window.decorView.systemUiVisibility=(View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_LAYOUT_STABLE or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN)
   tts=TextToSpeech(this,this)
@@ -29,11 +29,17 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
   web.settings.allowContentAccess=true
   web.webViewClient=WebViewClient()
   web.webChromeClient=object:WebChromeClient(){
-   override fun onShowFileChooser(v:WebView, cb:ValueCallback<Array<Uri>>, p:FileChooserParams):Boolean{
+   override fun onShowFileChooser(v:WebView,cb:ValueCallback<Array<Uri>>,p:FileChooserParams):Boolean{
     chooser?.onReceiveValue(null);chooser=cb
     return try{
-     val i=Intent(Intent.ACTION_OPEN_DOCUMENT).apply{addCategory(Intent.CATEGORY_OPENABLE);type="image/*";addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)}
-     startActivityForResult(i,request);true
+     val types=p.acceptTypes.filter{it.isNotBlank()}.flatMap{it.split(",")}.distinct().toTypedArray()
+     val intent=Intent(Intent.ACTION_OPEN_DOCUMENT).apply{
+      addCategory(Intent.CATEGORY_OPENABLE)
+      type=if(types.size==1)types[0] else "*/*"
+      if(types.size>1)putExtra(Intent.EXTRA_MIME_TYPES,types)
+      addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
+     }
+     startActivityForResult(intent,request);true
     }catch(e:Exception){chooser=null;false}
    }
   }
@@ -44,26 +50,29 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
  @Deprecated("Deprecated in Android API")
  override fun onActivityResult(code:Int,result:Int,data:Intent?){
   super.onActivityResult(code,result,data)
-  if(code==request){val uris=if(result==Activity.RESULT_OK&&data?.data!=null) arrayOf(data.data!!) else null;chooser?.onReceiveValue(uris);chooser=null}
+  if(code==request){
+   val uri=if(result==Activity.RESULT_OK)data?.data else null
+   if(uri!=null){try{contentResolver.takePersistableUriPermission(uri,Intent.FLAG_GRANT_READ_URI_PERMISSION)}catch(_:Exception){}}
+   chooser?.onReceiveValue(if(uri!=null)arrayOf(uri) else null);chooser=null
+  }
  }
- override fun onInit(status:Int){ready=status==TextToSpeech.SUCCESS;if(ready)tts?.language=Locale("uk","UA")}
+ override fun onInit(status:Int){ready=status==TextToSpeech.SUCCESS;if(ready)tts?.language=Locale.forLanguageTag("uk-UA")}
  inner class Voice{
-  @JavascriptInterface fun speak(text:String,language:String,style:String,rate:String){
+  @JavascriptInterface fun speak(text:String,language:String,pitch:String,rate:String){
    runOnUiThread{
     val engine=tts?:return@runOnUiThread
     if(!ready||text.isBlank())return@runOnUiThread
     val tag=when(language){"uk"->"uk-UA";"pl"->"pl-PL";"en"->"en-US";"de"->"de-DE";"fr"->"fr-FR";"es"->"es-ES";"it"->"it-IT";"cs"->"cs-CZ";"sk"->"sk-SK";else->language}
     val result=engine.setLanguage(Locale.forLanguageTag(tag))
     if(result==TextToSpeech.LANG_MISSING_DATA||result==TextToSpeech.LANG_NOT_SUPPORTED)engine.setLanguage(Locale.getDefault())
-    engine.setPitch(when(style){"female"->1.18f;"male"->0.88f;"child"->1.28f;"cartoon"->1.48f;else->1.0f})
+    engine.setPitch(pitch.toFloatOrNull()?.coerceIn(.5f,2f)?:1f)
     engine.setSpeechRate(rate.toFloatOrNull()?.coerceIn(.6f,1.4f)?:1f)
     engine.speak(text,TextToSpeech.QUEUE_FLUSH,null,"muvik")
    }
   }
+  @JavascriptInterface fun exitApp(){runOnUiThread{finish()}}
  }
  @Deprecated("Deprecated in Android API")
- override fun onBackPressed(){
-  if(::web.isInitialized)web.evaluateJavascript("if(data.editing){data.editing=false;save();render()}else if(data.page!=='home'){data.page='home';save();render()}",null) else super.onBackPressed()
- }
+ override fun onBackPressed(){if(::web.isInitialized)web.evaluateJavascript("handleSystemBack()",null)else super.onBackPressed()}
  override fun onDestroy(){if(::web.isInitialized)web.destroy();tts?.stop();tts?.shutdown();super.onDestroy()}
 }
