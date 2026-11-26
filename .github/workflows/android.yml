@@ -10,7 +10,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Download project
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Set up Java
@@ -24,14 +24,114 @@ jobs:
         with:
           gradle-version: '8.9'
 
-      - name: Extract Android project
+      - name: Extract and repair Muvik source
+        shell: bash
         run: |
+          set -euo pipefail
           unzip "MuvikAndroidProject (7).zip" -d extracted
-          echo "=== MAIN ACTIVITY ==="
-          cat extracted/MuvikAndroidProject/app/src/main/java/com/muvik/aac/MainActivity.kt
-          echo "=== HTML SOURCE ==="
-          cat extracted/MuvikAndroidProject/app/src/main/assets/index.html
-          test -f extracted/MuvikAndroidProject/app/build.gradle.kts
+          python3 <<'PY'
+          from pathlib import Path
+          root = Path("extracted/MuvikAndroidProject/app/src/main")
+          kt = root / "java/com/muvik/aac/MainActivity.kt"
+          html = root / "assets/index.html"
+          k = kt.read_text()
+          h = html.read_text(encoding="utf-8")
+
+          # Native Android file chooser bridge for gallery/photo selection.
+          k = k.replace("import android.app.Activity", "import android.app.Activity\nimport android.content.Intent\nimport android.net.Uri\nimport android.webkit.ValueCallback")
+          k = k.replace("    private var ttsReady = false", "    private var ttsReady = false\n    private var filePathCallback: ValueCallback<Array<Uri>>? = null\n    private val fileChooserRequest = 4102")
+          k = k.replace("        webView.settings.allowContentAccess = false", "        webView.settings.allowContentAccess = true")
+          k = k.replace("        webView.webChromeClient = WebChromeClient()", """        webView.webChromeClient = object : WebChromeClient() {
+              override fun onShowFileChooser(
+                  view: WebView,
+                  callback: ValueCallback<Array<Uri>>,
+                  params: FileChooserParams
+              ): Boolean {
+                  filePathCallback?.onReceiveValue(null)
+                  filePathCallback = callback
+                  return try {
+                      val intent = params.createIntent()
+                      startActivityForResult(intent, fileChooserRequest)
+                      true
+                  } catch (e: Exception) {
+                      filePathCallback = null
+                      false
+                  }
+              }
+          }""")
+          k = k.replace('    override fun onInit(status: Int) {', """    @Deprecated("Deprecated in Android API")
+          override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+              super.onActivityResult(requestCode, resultCode, data)
+              if (requestCode == fileChooserRequest) {
+                  val result = if (resultCode == Activity.RESULT_OK) WebChromeClient.FileChooserParams.parseResult(resultCode, data) else null
+                  filePathCallback?.onReceiveValue(result)
+                  filePathCallback = null
+              }
+          }
+
+          override fun onInit(status: Int) {""")
+          assert "onShowFileChooser" in k and "filePathCallback" in k
+          kt.write_text(k)
+
+          # Choose the first existing category when editing from the home screen.
+          old = '''function chooseCat(){
+           if(data.page!=="home") return data.cats.find(x=>x.id===data.page)||null;
+           if(!data.cats.length) return null;
+           let s=prompt("Оберіть розділ за номером:\\n"+data.cats.map((x,i)=>(i+1)+". "+nameOf(x)).join("\\n"));
+           if(s===null||s.trim()==="") return null;
+           let i=Number(s)-1; return Number.isInteger(i)?data.cats[i]||null:null;
+          }'''
+          new = '''function chooseCat(){
+           if(data.page!=="home") return data.cats.find(x=>x.id===data.page)||null;
+           if(!data.cats.length) return null;
+           data.page=data.cats[0].id;
+           return data.cats[0];
+          }'''
+          if old not in h:
+              # tolerate the source's exact newline escaping while still requiring the function block
+              start=h.find("function chooseCat(){")
+              end=h.find("\\n}", start)
+              if start < 0 or end < 0:
+                  raise SystemExit("chooseCat function not found; refusing unsafe patch")
+              h=h[:start]+new+h[end+2:]
+          else:
+              h=h.replace(old,new)
+
+          # Keep the editing workspace separate from the child's category/picture screen.
+          h=h.replace("body.editing .panel{display:block}", "body.editing .panel{display:block} body.editing #content{display:none}")
+          h=h.replace("#app{min-height:100vh;padding:10px}", "#app{min-height:100vh;padding:10px} html,body{min-height:100%;overflow-x:hidden} body{background-attachment:fixed}")
+          h=h.replace("#toast{position:fixed;", "#toTop{position:fixed;right:16px;bottom:68px;z-index:30;border:0;border-radius:50%;width:48px;height:48px;background:#3978e8;color:#fff;font-size:25px;box-shadow:0 3px 12px #0003;display:none} #toast{position:fixed;")
+          h=h.replace('<div id="toast"></div>', '<button id="toTop" aria-label="Вгору" onclick="window.scrollTo({top:0,behavior:\'smooth\'})">↑</button><div id="toast"></div>')
+          h=h.replace('save();\nrender();', """window.addEventListener("scroll",()=>{const b=document.getElementById("toTop");if(b)b.style.display=window.scrollY>180?"block":"none"},{passive:true});
+          save();
+          render();""")
+          # Add independent color backgrounds for the home screen and each category.
+          h=h.replace('settings:{homeCols:2,homeW:100,homeH:100,homePW:90,homePH:90,itemCols:3,itemW:100,itemH:100,itemPW:90,itemPH:90},',
+                      'settings:{homeCols:2,homeW:100,homeH:100,homePW:90,homePH:90,itemCols:3,itemW:100,itemH:100,itemPW:90,itemPH:90,homeBg:"#eef6ff"},')
+          h=h.replace('  const content=document.getElementById("content");',
+                      '  document.body.style.background=(c&&c.bg)||data.settings.homeBg||"#eef6ff";\n  const content=document.getElementById("content");')
+          h=h.replace('<button onclick="changeSectionImage()">🖼 Змінити картинку розділу</button>',
+                      '<button onclick="changeSectionImage()">🖼 Змінити картинку розділу</button>\n     <button onclick="changePageBackground()">🎨 Змінити фон</button>\n     <button onclick="resetPageBackground()">↩️ Стандартний фон</button>')
+          insert='''function changePageBackground(){
+           const c=data.page==="home"?null:data.cats.find(x=>x.id===data.page);
+           const current=(c&&c.bg)||data.settings.homeBg||"#eef6ff";
+           const color=prompt("Введіть колір фону (наприклад #FFF2CC):",current);
+           if(color===null)return;
+           if(!/^#[0-9a-fA-F]{6}$/.test(color.trim()))return alert("Введіть колір у форматі #RRGGBB.");
+           if(c)c.bg=color.trim();else data.settings.homeBg=color.trim();
+           save();render();
+          }
+          function resetPageBackground(){
+           const c=data.page==="home"?null:data.cats.find(x=>x.id===data.page);
+           if(c)delete c.bg;else data.settings.homeBg="#eef6ff";
+           save();render();
+          }
+          '''
+          h=h.replace('function addSection(){',insert+'function addSection(){')
+          assert "function changePageBackground()" in h and 'id="toTop"' in h and 'body.editing #content{display:none}' in h
+          html.write_text(h, encoding="utf-8")
+          print("Patched gallery picker, category selection, editor-only screen, scroll-to-top and background colors.")
+          PY
 
       - name: Align Java and Kotlin JVM targets
         run: |
@@ -45,13 +145,16 @@ jobs:
           }
           EOF
 
-      - name: Build APK
+      - name: Build fresh APK
         run: |
           cd extracted/MuvikAndroidProject
-          gradle assembleDebug
+          gradle clean assembleDebug --no-daemon --stacktrace
+          test -s app/build/outputs/apk/debug/app-debug.apk
+          ls -lh app/build/outputs/apk/debug/app-debug.apk
 
-      - name: Save APK
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Muvik-APK
-          path: extracted/MuvikAndroidProject/app/build/outputs/apk/debug/*.apk
+          name: Muvik-APK-fixed
+          path: extracted/MuvikAndroidProject/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
