@@ -29,6 +29,61 @@ jobs:
         run: |
           unzip "MuvikAndroidProject (7).zip" -d extracted
 
+      - name: Fix Android image picker and scrolling
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+          root = Path("extracted/MuvikAndroidProject/app/src/main")
+          p = root / "java/com/muvik/aac/MainActivity.kt"
+          s = p.read_text()
+          s = s.replace("import android.os.Bundle\n", "import android.os.Bundle\nimport android.content.Intent\nimport android.net.Uri\nimport android.webkit.ValueCallback\n")
+          s = s.replace("    private var ttsReady = false\n", "    private var ttsReady = false\n    private var filePathCallback: ValueCallback<Array<Uri>>? = null\n    private val FILE_CHOOSER_REQUEST = 4107\n")
+          s = s.replace("        webView.settings.allowContentAccess = false\n", "        webView.settings.allowContentAccess = true\n        webView.isVerticalScrollBarEnabled = true\n        webView.overScrollMode = View.OVER_SCROLL_IF_CONTENT_SCROLLS\n")
+          s = s.replace("        webView.webChromeClient = WebChromeClient()\n", """        webView.webChromeClient = object : WebChromeClient() {
+              override fun onShowFileChooser(webView: WebView?, callback: ValueCallback<Array<Uri>>?, params: FileChooserParams?): Boolean {
+                  this@MainActivity.filePathCallback?.onReceiveValue(null)
+                  this@MainActivity.filePathCallback = callback
+                  val intent = Intent(Intent.ACTION_GET_CONTENT).apply {
+                      addCategory(Intent.CATEGORY_OPENABLE)
+                      type = "image/*"
+                  }
+                  return try {
+                      startActivityForResult(Intent.createChooser(intent, "Виберіть зображення"), FILE_CHOOSER_REQUEST)
+                      true
+                  } catch (e: Exception) {
+                      this@MainActivity.filePathCallback?.onReceiveValue(null)
+                      this@MainActivity.filePathCallback = null
+                      false
+                  }
+              }
+          }
+  """)
+          s = s.replace("    override fun onInit(status: Int) {\n", """    @Deprecated("Deprecated in Android API")
+      override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+          super.onActivityResult(requestCode, resultCode, data)
+          if (requestCode == FILE_CHOOSER_REQUEST) {
+              val callback = filePathCallback ?: return
+              val result = if (resultCode == RESULT_OK && data?.data != null) arrayOf(data.data!!) else null
+              callback.onReceiveValue(result)
+              filePathCallback = null
+          }
+      }
+
+      override fun onInit(status: Int) {
+  """)
+          s = s.replace("        webView.destroy()\n", "        filePathCallback?.onReceiveValue(null)\n        filePathCallback = null\n        webView.destroy()\n")
+          p.write_text(s)
+
+          h = root / "assets/index.html"
+          t = h.read_text()
+          t = t.replace("*{box-sizing:border-box}\nbody{margin:0;", "*{box-sizing:border-box}\nhtml{min-height:100%;height:auto;overflow-y:auto;overscroll-behavior-y:contain}\nbody{min-height:100vh;height:auto;overflow-y:auto;overscroll-behavior-y:contain;margin:0;")
+          t = t.replace("#app{min-height:100vh;padding:10px}", "#app{min-height:100vh;height:auto;padding:10px 10px 80px}")
+          t = t.replace("#toast{position:fixed;", "#toTop{position:fixed;right:16px;bottom:18px;z-index:30;border:0;border-radius:50%;width:52px;height:52px;background:#3978e8;color:#fff;font-size:27px;font-weight:700;box-shadow:0 3px 12px #0003;display:none}\n#toast{position:fixed;")
+          t = t.replace('<div id="toast"></div>', '<button id="toTop" type="button" aria-label="Вгору" onclick="window.scrollTo({top:0,behavior:\'smooth\'})">↑</button>\n<div id="toast"></div>')
+          t = t.replace("save();\nrender();\n</script>", 'save();\nrender();\nconst toTop=document.getElementById("toTop");\nwindow.addEventListener("scroll",()=>{toTop.style.display=window.scrollY>180?"block":"none"},{passive:true});\n</script>')
+          h.write_text(t)
+          PY
+
       - name: Align Java and Kotlin JVM targets
         run: |
           cat >> extracted/MuvikAndroidProject/app/build.gradle.kts <<'EOF'
