@@ -29,6 +29,19 @@ jobs:
         run: |
           unzip "MuvikAndroidProject (7).zip" -d extracted
 
+      - name: Align Java and Kotlin JVM targets
+        run: |
+          cat >> extracted/MuvikAndroidProject/app/build.gradle.kts <<'EOF'
+
+          // Keep Java and Kotlin bytecode targets aligned.
+          android {
+              compileOptions {
+                  sourceCompatibility = JavaVersion.VERSION_17
+                  targetCompatibility = JavaVersion.VERSION_17
+              }
+          }
+          EOF
+
       - name: Build APK
         run: |
           cd extracted/MuvikAndroidProject
