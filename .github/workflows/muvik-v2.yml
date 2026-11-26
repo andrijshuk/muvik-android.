@@ -37,7 +37,8 @@ jobs:
           assert not refs-ids, f'Missing HTML ids: {refs-ids}'
           funcs=set(re.findall(r'function\s+(\w+)\s*\(',s))
           handlers=set(re.findall(r'onclick="(\w+)\(',s))
-          assert not (handlers-funcs-{'scrollTo'}), f'Missing click handlers: {handlers-funcs-{'scrollTo'}}'
+          missing=handlers-funcs-{'scrollTo'}
+          assert not missing, f'Missing click handlers: {missing}'
           assert s.lstrip().startswith('<!doctype html>')
           assert '1234' in s and 'До розділів' in s
           print(f'HTML checks passed: {len(ids)} ids, {len(funcs)} functions, {len(handlers)} click handlers')
