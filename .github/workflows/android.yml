@@ -133,6 +133,13 @@ jobs:
           print("Patched gallery picker, category selection, editor-only screen, scroll-to-top and background colors.")
           PY
 
+      - name: Save repaired source for detailed inspection
+        uses: actions/upload-artifact@v4
+        with:
+          name: Muvik-source-inspection
+          path: extracted/MuvikAndroidProject
+          if-no-files-found: error
+
       - name: Align Java and Kotlin JVM targets
         run: |
           cat >> extracted/MuvikAndroidProject/app/build.gradle.kts <<'EOF'
