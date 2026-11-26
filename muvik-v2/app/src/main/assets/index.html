@@ -45,7 +45,7 @@ function editItem(){let c=cur();if(!c||!c.items.length)return toast('Немає 
 function addLang(){let a=Object.keys(langs).filter(x=>!data.langs.includes(x));let v=prompt(a.map((x,i)=>(i+1)+'. '+langs[x][0]).join('\n'));if(v===null)return;let l=a[+v-1];if(!l)return toast('Неправильний номер');data.langs.push(l);save();render()}
 function delLang(){if(data.langs.length<2)return toast('Потрібна хоча б одна мова');let v=prompt(data.langs.map((x,i)=>(i+1)+'. '+langs[x][0]).join('\n'));if(v===null)return;let l=data.langs[+v-1];if(!l)return toast('Неправильний номер');if(!confirm('Видалити мову?'))return;data.langs=data.langs.filter(x=>x!==l);if(data.active===l)data.active=data.langs[0];save();render()}
 function showColors(){document.getElementById('swatches').scrollIntoView({behavior:'smooth'})}
-function drawColors(){let e=document.getElementById('swatches');e.replaceChildren();colors.forEach(c=>{let b=document.createElement('button');b.className='swatch';b.style.background=c;b.onclick=()=>{let x=cur();if(x){x.bg=c;x.photo=''}else{data.bg=c;data.photo=''}save();render()};e.append(b)})}
+function drawColors(){let e=document.getElementById('swatches');e.replaceChildren();colors.forEach(c=>{let b=document.createElement('button');b.className='swatch';b.style.background=c;b.onclick=()=>{let x=cur();if(x){x.bg=c;x.bgPhoto=''}else{data.bg=c;data.photo=''}save();render()};e.append(b)})}
 function resetBg(){let c=cur();if(c){c.bg='';c.bgPhoto=''}else{data.bg='#f2f7ff';data.photo=''}save();render()}
 function pickBg(){pickFile(p=>{let c=cur();if(c){c.bgPhoto=p;c.bg=''}else{data.photo=p;data.bg='#f2f7ff'}save();render()})}
 function pickCatPhoto(){let c=cur();if(!c)return toast('Відкрий розділ');pickFile(p=>{c.photo=p;save();render()})}
