@@ -55,7 +55,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
   super.onActivityResult(code,result,data)
   if(code==backupRequest){
    val uri=if(result==Activity.RESULT_OK)data?.data else null
-   if(uri!=null){try{contentResolver.openOutputStream(uri)?.use{it.write(pendingBackup?:byteArrayOf())};web.evaluateJavascript(\"toast('Резервну копію збережено')\",null)}catch(e:Exception){web.evaluateJavascript(\"toast('Не вдалося зберегти копію')\",null)}}
+   if(uri!=null){try{contentResolver.openOutputStream(uri)?.use{it.write(pendingBackup?:byteArrayOf())};web.evaluateJavascript("toast('Резервну копію збережено')",null)}catch(e:Exception){web.evaluateJavascript("toast('Не вдалося зберегти копію')",null)}}
    pendingBackup=null;return
   }
   if(code==request){
@@ -79,7 +79,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
    }
   }
   @JavascriptInterface fun saveBackup(encoded:String){
-   try{val bytes=Base64.decode(encoded,Base64.DEFAULT);runOnUiThread{pendingBackup=bytes;val intent=Intent(Intent.ACTION_CREATE_DOCUMENT).apply{addCategory(Intent.CATEGORY_OPENABLE);type=\"application/json\";putExtra(Intent.EXTRA_TITLE,\"Muvik-backup.json\")};startActivityForResult(intent,backupRequest)}}catch(e:Exception){runOnUiThread{web.evaluateJavascript(\"toast('Не вдалося створити копію')\",null)}}
+   try{val bytes=Base64.decode(encoded,Base64.DEFAULT);runOnUiThread{pendingBackup=bytes;val intent=Intent(Intent.ACTION_CREATE_DOCUMENT).apply{addCategory(Intent.CATEGORY_OPENABLE);type="application/json";putExtra(Intent.EXTRA_TITLE,"Muvik-backup.json")};startActivityForResult(intent,backupRequest)}}catch(e:Exception){runOnUiThread{web.evaluateJavascript("toast('Не вдалося створити копію')",null)}}
   }
   @JavascriptInterface fun exitApp(){runOnUiThread{finish()}}
  }
