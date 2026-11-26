@@ -81,7 +81,8 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
   @JavascriptInterface fun saveBackup(encoded:String){
    try{val bytes=Base64.decode(encoded,Base64.DEFAULT);runOnUiThread{pendingBackup=bytes;val intent=Intent(Intent.ACTION_CREATE_DOCUMENT).apply{addCategory(Intent.CATEGORY_OPENABLE);type="application/json";putExtra(Intent.EXTRA_TITLE,"Muvik-backup.json")};startActivityForResult(intent,backupRequest)}}catch(e:Exception){runOnUiThread{web.evaluateJavascript("toast('Не вдалося створити копію')",null)}}
   }
-  @JavascriptInterface fun installVoiceData(){runOnUiThread{try{startActivity(Intent(TextToSpeech.Engine.ACTION_INSTALL_TTS_DATA))}catch(e:Exception){web.evaluateJavascript("toast('Відкрий налаштування Android: Синтез мовлення')",null)}}}\n  @JavascriptInterface fun exitApp(){runOnUiThread{finish()}}
+  @JavascriptInterface fun installVoiceData(){runOnUiThread{try{startActivity(Intent(TextToSpeech.Engine.ACTION_INSTALL_TTS_DATA))}catch(e:Exception){web.evaluateJavascript("toast('Відкрий налаштування Android: Синтез мовлення')",null)}}}
+  @JavascriptInterface fun exitApp(){runOnUiThread{finish()}}
  }
  @Deprecated("Deprecated in Android API")
  override fun onBackPressed(){if(::web.isInitialized)web.evaluateJavascript("handleSystemBack()",null)else super.onBackPressed()}
