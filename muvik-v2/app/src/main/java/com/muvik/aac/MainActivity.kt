@@ -10,6 +10,7 @@ import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.view.View
+import android.util.Base64
 import java.util.Locale
 
 class MainActivity : Activity(), TextToSpeech.OnInitListener {
@@ -18,6 +19,8 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
  private var ready=false
  private var chooser: ValueCallback<Array<Uri>>?=null
  private val request=4102
+ private val backupRequest=4103
+ private var pendingBackup:ByteArray?=null
  override fun onCreate(savedInstanceState:Bundle?){
   super.onCreate(savedInstanceState)
   window.decorView.systemUiVisibility=(View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_LAYOUT_STABLE or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN)
@@ -50,6 +53,11 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
  @Deprecated("Deprecated in Android API")
  override fun onActivityResult(code:Int,result:Int,data:Intent?){
   super.onActivityResult(code,result,data)
+  if(code==backupRequest){
+   val uri=if(result==Activity.RESULT_OK)data?.data else null
+   if(uri!=null){try{contentResolver.openOutputStream(uri)?.use{it.write(pendingBackup?:byteArrayOf())};web.evaluateJavascript(\"toast('Резервну копію збережено')\",null)}catch(e:Exception){web.evaluateJavascript(\"toast('Не вдалося зберегти копію')\",null)}}
+   pendingBackup=null;return
+  }
   if(code==request){
    val uri=if(result==Activity.RESULT_OK)data?.data else null
    if(uri!=null){try{contentResolver.takePersistableUriPermission(uri,Intent.FLAG_GRANT_READ_URI_PERMISSION)}catch(_:Exception){}}
@@ -69,6 +77,9 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
     engine.setSpeechRate(rate.toFloatOrNull()?.coerceIn(.6f,1.4f)?:1f)
     engine.speak(text,TextToSpeech.QUEUE_FLUSH,null,"muvik")
    }
+  }
+  @JavascriptInterface fun saveBackup(encoded:String){
+   try{val bytes=Base64.decode(encoded,Base64.DEFAULT);runOnUiThread{pendingBackup=bytes;val intent=Intent(Intent.ACTION_CREATE_DOCUMENT).apply{addCategory(Intent.CATEGORY_OPENABLE);type=\"application/json\";putExtra(Intent.EXTRA_TITLE,\"Muvik-backup.json\")};startActivityForResult(intent,backupRequest)}}catch(e:Exception){runOnUiThread{web.evaluateJavascript(\"toast('Не вдалося створити копію')\",null)}}
   }
   @JavascriptInterface fun exitApp(){runOnUiThread{finish()}}
  }
