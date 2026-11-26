@@ -1,0 +1,58 @@
+name: Build Muvik v2 APK
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'muvik-v2/**'
+      - '.github/workflows/muvik-v2.yml'
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate JavaScript and UI references
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import re
+          from pathlib import Path
+          p=Path('muvik-v2/app/src/main/assets/index.html')
+          s=p.read_text()
+          js=s.split('<script>',1)[1].split('</script>',1)[0]
+          Path('/tmp/muvik.js').write_text(js)
+          ids=set(re.findall(r'id="([^"]+)"',s))
+          refs=set(re.findall(r"getElementById\('([^']+)'\)",s))
+          assert not refs-ids, f'Missing HTML ids: {refs-ids}'
+          funcs=set(re.findall(r'function\s+(\w+)\s*\(',s))
+          handlers=set(re.findall(r'onclick="(\w+)\(',s))
+          assert not handlers-funcs, f'Missing click handlers: {handlers-funcs}'
+          assert s.lstrip().startswith('<!doctype html>')
+          assert '1234' in s and 'До розділів' in s
+          print(f'HTML checks passed: {len(ids)} ids, {len(funcs)} functions, {len(handlers)} click handlers')
+          PY
+          node --check /tmp/muvik.js
+      - name: Build and lint Android app
+        run: |
+          cd muvik-v2
+          gradle clean testDebugUnitTest lintDebug assembleDebug --no-daemon --stacktrace
+          test -s app/build/outputs/apk/debug/app-debug.apk
+          unzip -l app/build/outputs/apk/debug/app-debug.apk | grep -q 'assets/index.html'
+          unzip -l app/build/outputs/apk/debug/app-debug.apk | grep -q 'ic_launcher_photo'
+          ls -lh app/build/outputs/apk/debug/app-debug.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Muvik-v2-APK
+          path: muvik-v2/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
