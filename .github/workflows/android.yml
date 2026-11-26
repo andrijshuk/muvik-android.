@@ -29,6 +29,13 @@ jobs:
         run: |
           unzip "MuvikAndroidProject (7).zip" -d extracted
 
+      - name: Inspect Muvik source
+        run: |
+          echo '===== MAIN ACTIVITY ====='
+          cat extracted/MuvikAndroidProject/app/src/main/java/com/muvik/aac/MainActivity.kt
+          echo '===== HTML APP ====='
+          cat extracted/MuvikAndroidProject/app/src/main/assets/index.html
+
       - name: Fix Android image picker and scrolling
         run: |
           python3 <<'PY'
