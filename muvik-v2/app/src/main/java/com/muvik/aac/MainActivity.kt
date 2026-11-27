@@ -104,7 +104,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
  }
  override fun onInit(status:Int){ready=status==TextToSpeech.SUCCESS;if(ready)tts?.language=Locale.forLanguageTag("uk-UA")}
  inner class Voice{
-  @JavascriptInterface fun speak(text:String,language:String,pitch:String,rate:String){
+  @JavascriptInterface fun speak(text:String,language:String,pitch:String,rate:String,volume:String){
    runOnUiThread{
     val engine=tts?:return@runOnUiThread
     if(!ready||text.isBlank())return@runOnUiThread
@@ -113,7 +113,8 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
     if(result==TextToSpeech.LANG_MISSING_DATA||result==TextToSpeech.LANG_NOT_SUPPORTED)engine.setLanguage(Locale.getDefault())
     engine.setPitch(pitch.toFloatOrNull()?.coerceIn(.5f,2f)?:1f)
     engine.setSpeechRate(rate.toFloatOrNull()?.coerceIn(.6f,1.4f)?:1f)
-    engine.speak(text,TextToSpeech.QUEUE_FLUSH,null,"muvik")
+    val params=Bundle().apply{putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME,volume.toFloatOrNull()?.coerceIn(0f,1f)?:1f)}
+    engine.speak(text,TextToSpeech.QUEUE_FLUSH,params,"muvik")
    }
   }
   @JavascriptInterface fun saveBackup(encoded:String){
