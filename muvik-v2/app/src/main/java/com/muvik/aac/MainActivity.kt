@@ -3,6 +3,7 @@ import android.app.Activity
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.os.Build
 import android.speech.tts.TextToSpeech
 import android.webkit.JavascriptInterface
 import android.webkit.ValueCallback
@@ -10,6 +11,8 @@ import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.view.View
+import android.view.WindowInsets
+import android.graphics.Color
 import android.util.Base64
 import java.util.Locale
 
@@ -23,9 +26,30 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
  private var pendingBackup:ByteArray?=null
  override fun onCreate(savedInstanceState:Bundle?){
   super.onCreate(savedInstanceState)
-  window.decorView.systemUiVisibility=(View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_LAYOUT_STABLE or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN)
+  window.statusBarColor=Color.rgb(226,238,255)
+  window.navigationBarColor=Color.rgb(226,238,255)
+  window.decorView.systemUiVisibility=View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
+  if(Build.VERSION.SDK_INT>=26) window.decorView.systemUiVisibility=window.decorView.systemUiVisibility or View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
   tts=TextToSpeech(this,this)
   web=WebView(this)
+  web.setOnApplyWindowInsetsListener { view, insets ->
+   val top:Int
+   val bottom:Int
+   if(Build.VERSION.SDK_INT>=30){
+    val bars=insets.getInsets(WindowInsets.Type.systemBars())
+    top=bars.top
+    bottom=bars.bottom
+   }else{
+    @Suppress("DEPRECATION")
+    val legacyTop=insets.systemWindowInsetTop
+    @Suppress("DEPRECATION")
+    val legacyBottom=insets.systemWindowInsetBottom
+    top=legacyTop
+    bottom=legacyBottom
+   }
+   view.setPadding(0,top,0,bottom)
+   insets
+  }
   web.settings.javaScriptEnabled=true
   web.settings.domStorageEnabled=true
   web.settings.allowFileAccess=true
@@ -36,7 +60,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
     chooser?.onReceiveValue(null)
     chooser=cb
     return try{
-     val intent=p.createIntent()
+     val intent=p.createIntent().apply{addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)}
      startActivityForResult(intent,request)
      true
     }catch(first:Exception){
@@ -100,5 +124,5 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
  }
  @Deprecated("Deprecated in Android API")
  override fun onBackPressed(){if(::web.isInitialized)web.evaluateJavascript("handleSystemBack()",null)else super.onBackPressed()}
- override fun onDestroy(){if(::web.isInitialized)web.destroy();tts?.stop();tts?.shutdown();super.onDestroy()}
+ override fun onDestroy(){chooser?.onReceiveValue(null);chooser=null;if(::web.isInitialized)web.destroy();tts?.stop();tts?.shutdown();super.onDestroy()}
 }
