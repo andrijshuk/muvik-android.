@@ -33,17 +33,30 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
   web.webViewClient=WebViewClient()
   web.webChromeClient=object:WebChromeClient(){
    override fun onShowFileChooser(v:WebView,cb:ValueCallback<Array<Uri>>,p:FileChooserParams):Boolean{
-    chooser?.onReceiveValue(null);chooser=cb
+    chooser?.onReceiveValue(null)
+    chooser=cb
     return try{
-     val types=p.acceptTypes.filter{it.isNotBlank()}.flatMap{it.split(",")}.distinct().toTypedArray()
-     val intent=Intent(Intent.ACTION_OPEN_DOCUMENT).apply{
-      addCategory(Intent.CATEGORY_OPENABLE)
-      type=if(types.size==1)types[0] else "*/*"
-      if(types.size>1)putExtra(Intent.EXTRA_MIME_TYPES,types)
-      addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
+     val intent=p.createIntent()
+     startActivityForResult(intent,request)
+     true
+    }catch(first:Exception){
+     try{
+      val types=p.acceptTypes.filter{it.isNotBlank()}.flatMap{it.split(",")}.distinct().toTypedArray()
+      val fallback=Intent(Intent.ACTION_GET_CONTENT).apply{
+       addCategory(Intent.CATEGORY_OPENABLE)
+       type=if(types.size==1)types[0] else "*/*"
+       if(types.size>1)putExtra(Intent.EXTRA_MIME_TYPES,types)
+       addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+      }
+      startActivityForResult(fallback,request)
+      true
+     }catch(second:Exception){
+      chooser?.onReceiveValue(null)
+      chooser=null
+      web.post{web.evaluateJavascript("toast('Не вдалося відкрити галерею. Спробуй ще раз.')",null)}
+      false
      }
-     startActivityForResult(intent,request);true
-    }catch(e:Exception){chooser=null;false}
+    }
    }
   }
   web.addJavascriptInterface(Voice(),"AndroidTTS")
@@ -59,9 +72,10 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
    pendingBackup=null;return
   }
   if(code==request){
-   val uri=if(result==Activity.RESULT_OK)data?.data else null
-   if(uri!=null){try{contentResolver.takePersistableUriPermission(uri,Intent.FLAG_GRANT_READ_URI_PERMISSION)}catch(_:Exception){}}
-   chooser?.onReceiveValue(if(uri!=null)arrayOf(uri) else null);chooser=null
+   val uris=if(result==Activity.RESULT_OK)WebChromeClient.FileChooserParams.parseResult(result,data) else null
+   uris?.forEach{uri->try{contentResolver.takePersistableUriPermission(uri,Intent.FLAG_GRANT_READ_URI_PERMISSION)}catch(_:Exception){}}
+   chooser?.onReceiveValue(uris)
+   chooser=null
   }
  }
  override fun onInit(status:Int){ready=status==TextToSpeech.SUCCESS;if(ready)tts?.language=Locale.forLanguageTag("uk-UA")}
